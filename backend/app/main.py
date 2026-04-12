@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routers import market
+from app.routers import market, financials, ratios
 
 app = FastAPI(title="Financial Dashboard API", version="1.0.0")
 
@@ -14,6 +14,8 @@ app.add_middleware(
 )
 
 app.include_router(market.router)
+app.include_router(financials.router)
+app.include_router(ratios.router)
 
 @app.get("/health")
 def health():
