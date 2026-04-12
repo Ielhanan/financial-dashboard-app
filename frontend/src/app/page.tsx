@@ -1,8 +1,11 @@
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+
 export default function DashboardPage() {
   return (
-    <main className="p-8">
-      <h1 className="text-2xl font-bold">Financial Dashboard</h1>
-      <p className="text-gray-400 mt-2">Select a ticker to begin.</p>
-    </main>
+    <DashboardLayout>
+      <div className="xl:col-span-12 text-center text-gray-500 py-20">
+        Modules loading...
+      </div>
+    </DashboardLayout>
   );
 }
