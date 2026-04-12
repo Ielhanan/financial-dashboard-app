@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import pandas as pd
 import yfinance as yf
 from app.models.schemas import (
@@ -6,8 +7,18 @@ from app.models.schemas import (
     DividendResponse, DividendRecord,
 )
 
+logger = logging.getLogger(__name__)
+
 
 async def get_ownership(ticker: str) -> OwnershipResponse:
+    try:
+        return await _get_ownership_inner(ticker)
+    except Exception as exc:
+        logger.warning("get_ownership failed for %s: %s", ticker, exc)
+        return OwnershipResponse(ticker=ticker.upper(), insider_pct=0.0, institutional_pct=0.0, top_holders=[])
+
+
+async def _get_ownership_inner(ticker: str) -> OwnershipResponse:
     loop = asyncio.get_event_loop()
     t = await loop.run_in_executor(None, lambda: yf.Ticker(ticker))
 
@@ -35,6 +46,14 @@ async def get_ownership(ticker: str) -> OwnershipResponse:
 
 
 async def get_dividends(ticker: str) -> DividendResponse:
+    try:
+        return await _get_dividends_inner(ticker)
+    except Exception as exc:
+        logger.warning("get_dividends failed for %s: %s", ticker, exc)
+        return DividendResponse(ticker=ticker.upper(), dividends=[])
+
+
+async def _get_dividends_inner(ticker: str) -> DividendResponse:
     loop = asyncio.get_event_loop()
     t = await loop.run_in_executor(None, lambda: yf.Ticker(ticker))
 

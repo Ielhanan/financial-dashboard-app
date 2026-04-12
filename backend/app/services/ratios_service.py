@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import Optional
 import yfinance as yf
 from app.models.schemas import RatiosResponse, RatioWithBenchmark, HistoricalRatio
@@ -26,7 +27,18 @@ def _safe_float(val) -> Optional[float]:
         return None
 
 
+logger = logging.getLogger(__name__)
+
+
 async def get_ratios(ticker: str) -> RatiosResponse:
+    try:
+        return await _get_ratios_inner(ticker)
+    except Exception as exc:
+        logger.warning("ratios_service failed for %s: %s", ticker, exc)
+        return RatiosResponse(ticker=ticker.upper(), current=[], historical=[])
+
+
+async def _get_ratios_inner(ticker: str) -> RatiosResponse:
     loop = asyncio.get_event_loop()
     t = await loop.run_in_executor(None, lambda: yf.Ticker(ticker))
 

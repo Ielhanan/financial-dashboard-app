@@ -1,7 +1,14 @@
+import requests_cache
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.routers import market, financials, ratios, ownership, news
+
+# Cache all Yahoo Finance HTTP responses for 60 seconds.
+# This means all yf.Ticker instances across all services share one cached
+# response per URL — eliminating the 429 rate-limit errors caused by
+# 10+ simultaneous requests for the same ticker on each "Load" click.
+requests_cache.install_cache("yfinance_cache", expire_after=60)
 
 app = FastAPI(title="Financial Dashboard API", version="1.0.0")
 
