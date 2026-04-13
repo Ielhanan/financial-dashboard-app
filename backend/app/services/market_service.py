@@ -1,24 +1,27 @@
 import asyncio
 import logging
-import yfinance as yf
 from app.models.schemas import MarketSnapshot
+from app.services import fmp_client
 
 logger = logging.getLogger(__name__)
 
+
 async def get_market_snapshot(ticker: str) -> MarketSnapshot:
     try:
-        loop = asyncio.get_event_loop()
-        info = await loop.run_in_executor(None, lambda: yf.Ticker(ticker).info)
+        quote, metrics, balance_sheets = await asyncio.gather(
+            fmp_client.get_quote(ticker),
+            fmp_client.get_key_metrics(ticker),
+            fmp_client.get_balance_sheets_quarterly(ticker),
+        )
 
-        price = info.get("currentPrice") or info.get("regularMarketPrice") or 0.0
-        market_cap = info.get("marketCap") or 0.0
-        total_debt = info.get("totalDebt") or 0.0
-        cash = info.get("totalCash") or 0.0
-        shares = info.get("sharesOutstanding") or 0.0
+        price = float(quote.get("price") or 0.0)
+        market_cap = float(quote.get("marketCap") or 0.0)
+        shares = float(quote.get("sharesOutstanding") or 0.0)
+        ev = float(metrics.get("enterpriseValue") or market_cap)
 
-        ev = info.get("enterpriseValue")
-        if ev is None:
-            ev = market_cap + total_debt - cash
+        latest = balance_sheets[0] if balance_sheets else {}
+        total_debt = float(latest.get("totalDebt") or 0.0)
+        cash = float(latest.get("cashAndCashEquivalents") or 0.0)
 
         return MarketSnapshot(
             ticker=ticker.upper(),
