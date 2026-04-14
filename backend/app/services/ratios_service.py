@@ -1,8 +1,8 @@
 import asyncio
 import logging
 from typing import Optional
-import yfinance as yf
 from app.models.schemas import RatiosResponse, RatioWithBenchmark, HistoricalRatio
+from app.services import fmp_client
 
 SECTOR_PE_BENCHMARKS: dict[str, float] = {
     "Technology": 28.0, "Healthcare": 22.0, "Financial Services": 14.0,
@@ -18,16 +18,15 @@ SECTOR_PB_BENCHMARKS: dict[str, float] = {
     "Utilities": 1.6, "Real Estate": 2.0, "Basic Materials": 2.0,
 }
 
+logger = logging.getLogger(__name__)
+
 
 def _safe_float(val) -> Optional[float]:
     try:
         v = float(val)
-        return round(v, 2) if v == v else None   # NaN check
+        return round(v, 2) if v == v else None
     except (TypeError, ValueError):
         return None
-
-
-logger = logging.getLogger(__name__)
 
 
 async def get_ratios(ticker: str) -> RatiosResponse:
@@ -39,51 +38,47 @@ async def get_ratios(ticker: str) -> RatiosResponse:
 
 
 async def _get_ratios_inner(ticker: str) -> RatiosResponse:
-    loop = asyncio.get_event_loop()
-    t = await loop.run_in_executor(None, lambda: yf.Ticker(ticker))
+    metrics, profile, cash_flows, balance_sheets = await asyncio.gather(
+        fmp_client.get_key_metrics(ticker),
+        fmp_client.get_profile(ticker),
+        fmp_client.get_cash_flow_annual(ticker),
+        fmp_client.get_balance_sheets_annual(ticker),
+    )
 
-    info = t.info
-    sector = info.get("sector", "Technology")
+    sector = profile.get("sector", "Technology")
+    market_cap = float(metrics.get("marketCap") or 0.0)
 
-    pe = _safe_float(info.get("trailingPE"))
-    pb = _safe_float(info.get("priceToBook"))
-    ev_ebitda = _safe_float(info.get("enterpriseToEbitda"))
-    market_cap = _safe_float(info.get("marketCap")) or 0.0
-    fcf = _safe_float(info.get("freeCashflow"))
-    p_fcf = round(market_cap / fcf, 2) if fcf and fcf > 0 else None
-
-    total_debt = _safe_float(info.get("totalDebt")) or 0.0
-    equity = _safe_float(info.get("totalStockholderEquity")) or 1.0
-    d_e = round(total_debt / equity, 2) if equity != 0 else None
+    pe = _safe_float(metrics.get("peRatio"))
+    pb = _safe_float(metrics.get("pbRatio"))
+    ev_ebitda = _safe_float(metrics.get("enterpriseValueOverEBITDA"))
+    p_fcf = _safe_float(metrics.get("pfcfRatio"))
+    d_e = _safe_float(metrics.get("debtToEquity"))
 
     current = [
-        RatioWithBenchmark(name="P/E", value=pe, sector_average=SECTOR_PE_BENCHMARKS.get(sector)),
-        RatioWithBenchmark(name="P/B", value=pb, sector_average=SECTOR_PB_BENCHMARKS.get(sector)),
+        RatioWithBenchmark(name="P/E",       value=pe,       sector_average=SECTOR_PE_BENCHMARKS.get(sector)),
+        RatioWithBenchmark(name="P/B",       value=pb,       sector_average=SECTOR_PB_BENCHMARKS.get(sector)),
         RatioWithBenchmark(name="EV/EBITDA", value=ev_ebitda, sector_average=15.0),
-        RatioWithBenchmark(name="P/FCF", value=p_fcf, sector_average=20.0),
-        RatioWithBenchmark(name="D/E", value=d_e, sector_average=1.5),
+        RatioWithBenchmark(name="P/FCF",     value=p_fcf,    sector_average=20.0),
+        RatioWithBenchmark(name="D/E",       value=d_e,      sector_average=1.5),
     ]
 
+    # Build historical by joining cash-flow and balance-sheet on year
+    cf_by_year = {cf["date"][:4]: cf for cf in cash_flows if cf.get("date")}
+    bs_by_year = {bs["date"][:4]: bs for bs in balance_sheets if bs.get("date")}
+    years = sorted(set(cf_by_year) | set(bs_by_year))[-5:]
+
     historical: list[HistoricalRatio] = []
-    cf = t.cashflow
-    bs = t.balance_sheet
+    for year in years:
+        cf = cf_by_year.get(year, {})
+        bs = bs_by_year.get(year, {})
 
-    if cf is not None and not cf.empty and bs is not None and not bs.empty:
-        for col in sorted(cf.columns)[-5:]:
-            op_cf = cf.loc["Total Cash From Operating Activities", col] if "Total Cash From Operating Activities" in cf.index else None
-            capex = cf.loc["Capital Expenditures", col] if "Capital Expenditures" in cf.index else None
-            hist_fcf = float(op_cf) + float(capex) if op_cf is not None and capex is not None else None
+        fcf = _safe_float(cf.get("freeCashFlow"))
+        hist_p_fcf = round(market_cap / fcf, 2) if fcf and fcf > 0 else None
 
-            hist_debt = float(bs.loc["Total Debt", col]) if "Total Debt" in bs.index and col in bs.columns else None
-            hist_equity = float(bs.loc["Total Stockholder Equity", col]) if "Total Stockholder Equity" in bs.index and col in bs.columns else None
+        total_debt = _safe_float(bs.get("totalDebt"))
+        equity = _safe_float(bs.get("totalStockholdersEquity"))
+        hist_de = round(total_debt / equity, 2) if total_debt is not None and equity and equity != 0 else None
 
-            hist_p_fcf = round(market_cap / hist_fcf, 2) if hist_fcf and hist_fcf > 0 else None
-            hist_de = round(hist_debt / hist_equity, 2) if hist_debt is not None and hist_equity and hist_equity != 0 else None
-
-            historical.append(HistoricalRatio(
-                year=col.year,
-                p_fcf=hist_p_fcf,
-                d_e=hist_de,
-            ))
+        historical.append(HistoricalRatio(year=int(year), p_fcf=hist_p_fcf, d_e=hist_de))
 
     return RatiosResponse(ticker=ticker.upper(), current=current, historical=historical)
