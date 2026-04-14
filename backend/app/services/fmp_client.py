@@ -108,10 +108,10 @@ async def get_profile(ticker: str) -> dict:
 
 
 async def get_income_statements_quarterly(ticker: str) -> list[dict]:
-    """GET /income-statement?symbol={ticker}&period=quarterly&limit=20"""
+    """GET /income-statement?symbol={ticker}&period=quarterly&limit=5 (free tier max)"""
     data = await _cached(
         ticker, "income_q", "/income-statement", _TTL_STMTS,
-        {"symbol": ticker, "period": "quarterly", "limit": 20},
+        {"symbol": ticker, "period": "quarterly", "limit": 5},
     )
     return data if isinstance(data, list) else []
 
@@ -126,10 +126,10 @@ async def get_income_statements_annual(ticker: str) -> list[dict]:
 
 
 async def get_balance_sheets_quarterly(ticker: str) -> list[dict]:
-    """GET /balance-sheet-statement?symbol={ticker}&period=quarterly&limit=20"""
+    """GET /balance-sheet-statement?symbol={ticker}&period=quarterly&limit=5 (free tier max)"""
     data = await _cached(
         ticker, "balance_q", "/balance-sheet-statement", _TTL_STMTS,
-        {"symbol": ticker, "period": "quarterly", "limit": 20},
+        {"symbol": ticker, "period": "quarterly", "limit": 5},
     )
     return data if isinstance(data, list) else []
 
