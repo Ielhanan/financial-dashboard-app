@@ -57,6 +57,7 @@ export function OwnershipModule() {
       <DataTable
         title="Top Institutional Holders"
         exportFilename={`${ticker}-ownership`}
+        emptyMessage="Institutional holder data is not available on the free FMP plan."
         data={(ownership?.top_holders ?? []).map((h) => ({
           holder: h.holder,
           pct_out: h.pct_out,

@@ -45,7 +45,7 @@ export function createMarketWebSocket(
   onMessage: (snapshot: MarketSnapshot) => void
 ): WebSocket {
   const wsUrl = BASE_URL.replace(/^http/, "ws");
-  const ws = new WebSocket(`${wsUrl}/ws/market/${ticker}`);
+  const ws = new WebSocket(`${wsUrl}/api/ws/market/${ticker}`);
   ws.onmessage = (event) => {
     try {
       onMessage(JSON.parse(event.data) as MarketSnapshot);

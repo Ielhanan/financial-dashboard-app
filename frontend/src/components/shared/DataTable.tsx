@@ -15,6 +15,7 @@ interface DataTableProps<T> {
   data: T[];
   title?: string;
   exportFilename?: string;
+  emptyMessage?: string;
 }
 
 export function DataTable<T extends Record<string, unknown>>({
@@ -22,6 +23,7 @@ export function DataTable<T extends Record<string, unknown>>({
   data,
   title,
   exportFilename = "export",
+  emptyMessage = "No data available",
 }: DataTableProps<T>) {
   const [sortKey, setSortKey] = useState<keyof T | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
@@ -113,7 +115,7 @@ export function DataTable<T extends Record<string, unknown>>({
                   colSpan={columns.length}
                   className="px-4 py-8 text-center text-gray-500"
                 >
-                  No data available
+                  {emptyMessage}
                 </td>
               </tr>
             )}

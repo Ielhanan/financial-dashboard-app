@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Optional
 from app.models.schemas import (
@@ -18,6 +19,18 @@ def _fmt_period_str(date_str: str) -> str:
         return f"{year}-Q{q}"
     except Exception:
         return date_str
+
+
+def _next_quarter(period: str) -> str:
+    """'2025-Q4' → '2026-Q1', '2025-Q1' → '2025-Q2'."""
+    try:
+        year, q = period.split("-Q")
+        q = int(q)
+        if q == 4:
+            return f"{int(year) + 1}-Q1"
+        return f"{year}-Q{q + 1}"
+    except Exception:
+        return period
 
 
 def _yoy_delta(current: Optional[float], prior: Optional[float]) -> Optional[float]:
@@ -43,18 +56,44 @@ async def get_eps_revenue(ticker: str) -> EPSRevenueResponse:
 
 
 async def _get_eps_revenue_inner(ticker: str) -> EPSRevenueResponse:
-    # FMP returns newest-first; reverse so index math for YoY works oldest-first
-    statements = list(reversed(await fmp_client.get_income_statements_quarterly(ticker)))
+    annual_raw, quarterly_raw = await asyncio.gather(
+        fmp_client.get_income_statements_annual(ticker),
+        fmp_client.get_income_statements_quarterly(ticker),
+    )
+
+    # FMP returns newest-first; reverse to oldest-first for chronological order
+    annual_stmts = list(reversed(annual_raw))
+    quarterly_stmts = list(reversed(quarterly_raw))
 
     eps_records: list[QuarterlyEPS] = []
     rev_records: list[QuarterlyRevenue] = []
 
-    for i, stmt in enumerate(statements):
+    # Annual history — only for fiscal years not already covered by quarterly data
+    quarterly_years = {s.get("date", "")[:4] for s in quarterly_stmts}
+    for stmt in annual_stmts:
+        year = stmt.get("date", "")[:4]
+        if year in quarterly_years:
+            continue
+        eps_records.append(QuarterlyEPS(
+            period=f"FY{year}",
+            eps_actual=_safe_float(stmt.get("eps")),
+            eps_estimate=None,
+            eps_yoy_delta_pct=None,
+        ))
+        rev_records.append(QuarterlyRevenue(
+            period=f"FY{year}",
+            revenue_actual=_safe_float(stmt.get("revenue")),
+            revenue_estimate=None,
+            revenue_yoy_delta_pct=None,
+        ))
+
+    # Quarterly actuals
+    for i, stmt in enumerate(quarterly_stmts):
         period = _fmt_period_str(stmt.get("date", ""))
         eps = _safe_float(stmt.get("eps"))
         rev = _safe_float(stmt.get("revenue"))
-        prior_eps = _safe_float(statements[i - 4].get("eps")) if i >= 4 else None
-        prior_rev = _safe_float(statements[i - 4].get("revenue")) if i >= 4 else None
+        prior_eps = _safe_float(quarterly_stmts[i - 4].get("eps")) if i >= 4 else None
+        prior_rev = _safe_float(quarterly_stmts[i - 4].get("revenue")) if i >= 4 else None
 
         eps_records.append(QuarterlyEPS(
             period=period,
@@ -69,11 +108,67 @@ async def _get_eps_revenue_inner(ticker: str) -> EPSRevenueResponse:
             revenue_yoy_delta_pct=_yoy_delta(rev, prior_rev),
         ))
 
+    # 4 projected future quarters
+    _append_projections(quarterly_stmts, eps_records, rev_records)
+
     return EPSRevenueResponse(
         ticker=ticker.upper(),
-        quarterly_eps=eps_records[-20:],
-        quarterly_revenue=rev_records[-20:],
+        quarterly_eps=eps_records,
+        quarterly_revenue=rev_records,
     )
+
+
+def _append_projections(
+    quarterly_stmts: list[dict],
+    eps_records: list[QuarterlyEPS],
+    rev_records: list[QuarterlyRevenue],
+) -> None:
+    """Append 4 estimated future quarters using average YoY growth rate."""
+    if not quarterly_stmts:
+        return
+
+    # Average YoY growth from actual quarterly records (skip FY and None)
+    yoy_eps = [r.eps_yoy_delta_pct for r in eps_records
+               if not r.period.startswith("FY") and r.eps_yoy_delta_pct is not None]
+    yoy_rev = [r.revenue_yoy_delta_pct for r in rev_records
+               if not r.period.startswith("FY") and r.revenue_yoy_delta_pct is not None]
+
+    eps_growth = (sum(yoy_eps) / len(yoy_eps) / 100) if yoy_eps else 0.05
+    rev_growth = (sum(yoy_rev) / len(yoy_rev) / 100) if yoy_rev else 0.05
+
+    # Base values: the 4 most recent actual quarterly records (same-quarter projection)
+    actual_eps = [r for r in eps_records if not r.period.startswith("FY") and r.eps_actual is not None]
+    actual_rev = [r for r in rev_records if not r.period.startswith("FY") and r.revenue_actual is not None]
+
+    # The last actual period
+    last_period = actual_eps[-1].period if actual_eps else "2025-Q4"
+
+    for i in range(4):
+        next_period = _next_quarter(last_period)
+        last_period = next_period
+
+        # Base: same quarter from prior year (4 back)
+        base_eps_idx = len(actual_eps) - 4 + i
+        base_rev_idx = len(actual_rev) - 4 + i
+
+        base_eps = actual_eps[base_eps_idx].eps_actual if 0 <= base_eps_idx < len(actual_eps) else (actual_eps[-1].eps_actual if actual_eps else None)
+        base_rev = actual_rev[base_rev_idx].revenue_actual if 0 <= base_rev_idx < len(actual_rev) else (actual_rev[-1].revenue_actual if actual_rev else None)
+
+        proj_eps = round(base_eps * (1 + eps_growth), 2) if base_eps is not None else None
+        proj_rev = round(base_rev * (1 + rev_growth)) if base_rev is not None else None
+
+        eps_records.append(QuarterlyEPS(
+            period=next_period,
+            eps_actual=None,
+            eps_estimate=proj_eps,
+            eps_yoy_delta_pct=round(eps_growth * 100, 1),
+        ))
+        rev_records.append(QuarterlyRevenue(
+            period=next_period,
+            revenue_actual=None,
+            revenue_estimate=proj_rev,
+            revenue_yoy_delta_pct=round(rev_growth * 100, 1),
+        ))
 
 
 async def get_cash_data(ticker: str) -> CashResponse:

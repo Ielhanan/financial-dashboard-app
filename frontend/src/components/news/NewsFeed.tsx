@@ -59,7 +59,7 @@ export function NewsFeed() {
           ))}
           {(data?.items ?? []).length === 0 && (
             <div className="px-4 py-8 text-center text-gray-500 text-sm">
-              No news available for {ticker}.
+              News is not available on the free FMP plan.
             </div>
           )}
         </div>

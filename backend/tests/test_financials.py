@@ -16,6 +16,12 @@ MOCK_INCOME_Q = [
     {"date": "2022-06-30", "revenue": 9.3e10,  "eps": 2.0},
 ]
 
+# FMP returns newest-first; older annual data not covered by quarterly years
+MOCK_INCOME_A = [
+    {"date": "2022-09-24", "revenue": 3.94e11, "eps": 6.15},
+    {"date": "2021-09-25", "revenue": 3.66e11, "eps": 5.67},
+]
+
 MOCK_BALANCE_Q = [
     {"date": "2024-03-30", "cashAndCashEquivalents": 2e10, "shortTermInvestments": 1e10},
     {"date": "2023-12-31", "cashAndCashEquivalents": 2e10, "shortTermInvestments": 1e10},
@@ -23,7 +29,7 @@ MOCK_BALANCE_Q = [
     {"date": "2023-06-30", "cashAndCashEquivalents": 2e10, "shortTermInvestments": 1e10},
 ]
 
-MOCK_INCOME_A = [
+MOCK_INCOME_A_BACKLOG = [
     {"date": "2023-12-31", "revenue": 3.85e11},
     {"date": "2022-12-31", "revenue": 3.75e11},
     {"date": "2021-12-31", "revenue": 3.65e11},
@@ -32,7 +38,10 @@ MOCK_INCOME_A = [
 
 @pytest.mark.anyio
 async def test_get_eps_revenue_returns_schema():
-    with patch.object(fmp_client, "get_income_statements_quarterly", new=AsyncMock(return_value=MOCK_INCOME_Q)):
+    with (
+        patch.object(fmp_client, "get_income_statements_quarterly", new=AsyncMock(return_value=MOCK_INCOME_Q)),
+        patch.object(fmp_client, "get_income_statements_annual", new=AsyncMock(return_value=MOCK_INCOME_A)),
+    ):
         result = await get_eps_revenue("AAPL")
     assert isinstance(result, EPSRevenueResponse)
     assert result.ticker == "AAPL"
@@ -41,8 +50,43 @@ async def test_get_eps_revenue_returns_schema():
 
 
 @pytest.mark.anyio
+async def test_get_eps_revenue_includes_annual_history():
+    with (
+        patch.object(fmp_client, "get_income_statements_quarterly", new=AsyncMock(return_value=MOCK_INCOME_Q)),
+        patch.object(fmp_client, "get_income_statements_annual", new=AsyncMock(return_value=MOCK_INCOME_A)),
+    ):
+        result = await get_eps_revenue("AAPL")
+    fy_periods = [r.period for r in result.quarterly_eps if r.period.startswith("FY")]
+    assert len(fy_periods) > 0
+
+
+@pytest.mark.anyio
+async def test_get_eps_revenue_includes_projections():
+    with (
+        patch.object(fmp_client, "get_income_statements_quarterly", new=AsyncMock(return_value=MOCK_INCOME_Q)),
+        patch.object(fmp_client, "get_income_statements_annual", new=AsyncMock(return_value=MOCK_INCOME_A)),
+    ):
+        result = await get_eps_revenue("AAPL")
+    projected = [r for r in result.quarterly_eps if r.eps_actual is None and r.eps_estimate is not None]
+    assert len(projected) == 4
+
+
+@pytest.mark.anyio
+async def test_get_eps_revenue_computes_yoy_delta():
+    with (
+        patch.object(fmp_client, "get_income_statements_quarterly", new=AsyncMock(return_value=MOCK_INCOME_Q)),
+        patch.object(fmp_client, "get_income_statements_annual", new=AsyncMock(return_value=MOCK_INCOME_A)),
+    ):
+        result = await get_eps_revenue("AAPL")
+    quarters_with_delta = [q for q in result.quarterly_eps if q.eps_yoy_delta_pct is not None]
+    assert len(quarters_with_delta) > 0
+
+
+@pytest.mark.anyio
 async def test_get_cash_data_returns_schema():
-    with patch.object(fmp_client, "get_balance_sheets_quarterly", new=AsyncMock(return_value=MOCK_BALANCE_Q)):
+    with (
+        patch.object(fmp_client, "get_balance_sheets_quarterly", new=AsyncMock(return_value=MOCK_BALANCE_Q)),
+    ):
         result = await get_cash_data("AAPL")
     assert isinstance(result, CashResponse)
     assert all(
@@ -53,16 +97,10 @@ async def test_get_cash_data_returns_schema():
 
 @pytest.mark.anyio
 async def test_get_order_backlog_returns_revenue_proxy():
-    with patch.object(fmp_client, "get_income_statements_annual", new=AsyncMock(return_value=MOCK_INCOME_A)):
+    with (
+        patch.object(fmp_client, "get_income_statements_annual", new=AsyncMock(return_value=MOCK_INCOME_A_BACKLOG)),
+    ):
         result = await get_order_backlog("AAPL")
     assert isinstance(result, OrderBacklogResponse)
     assert len(result.annual) >= 1
     assert "proxy" in result.note.lower()
-
-
-@pytest.mark.anyio
-async def test_get_eps_revenue_computes_yoy_delta():
-    with patch.object(fmp_client, "get_income_statements_quarterly", new=AsyncMock(return_value=MOCK_INCOME_Q)):
-        result = await get_eps_revenue("AAPL")
-    quarters_with_delta = [q for q in result.quarterly_eps if q.eps_yoy_delta_pct is not None]
-    assert len(quarters_with_delta) > 0
