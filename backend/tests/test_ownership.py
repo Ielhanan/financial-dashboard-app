@@ -1,28 +1,32 @@
 import pytest
-import pandas as pd
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, AsyncMock
 from app.services.ownership_service import get_ownership, get_dividends
 from app.models.schemas import OwnershipResponse, DividendResponse
+from app.services import fmp_client
 
-def _make_mock_ticker():
-    mock = MagicMock()
-    mock.info = {
-        "heldPercentInsiders": 0.03,
-        "heldPercentInstitutions": 0.62,
-        "trailingAnnualDividendYield": 0.0054,
-    }
-    mock.institutional_holders = pd.DataFrame({
-        "Holder": ["Vanguard Group", "BlackRock"],
-        "Shares": [1_200_000_000, 1_000_000_000],
-        "% Out": [0.079, 0.065],
-    })
-    dates = pd.to_datetime(["2024-02-09", "2023-11-10", "2023-08-11", "2023-05-12"])
-    mock.dividends = pd.Series([0.24, 0.24, 0.24, 0.24], index=dates, name="Dividends")
-    return mock
+MOCK_HOLDERS = [
+    {"holder": "Vanguard Group", "shares": 1_200_000_000, "sharesPercent": 0.079},
+    {"holder": "BlackRock",      "shares": 1_000_000_000, "sharesPercent": 0.065},
+]
+
+# FMP returns newest-first
+MOCK_DIVIDENDS = [
+    {"date": "2024-02-09", "dividend": 0.24, "recordDate": "2024-02-12", "declarationDate": "2024-02-01"},
+    {"date": "2023-11-10", "dividend": 0.24, "recordDate": "2023-11-13", "declarationDate": "2023-11-02"},
+    {"date": "2023-08-11", "dividend": 0.24, "recordDate": "2023-08-14", "declarationDate": "2023-08-03"},
+    {"date": "2023-05-12", "dividend": 0.24, "recordDate": "2023-05-15", "declarationDate": "2023-05-04"},
+]
+
+MOCK_DIVIDENDS_WITH_OLD = [
+    {"date": "2024-02-09", "dividend": 0.24, "recordDate": None, "declarationDate": None},
+    {"date": "2023-11-10", "dividend": 0.24, "recordDate": None, "declarationDate": None},
+    {"date": "2018-01-01", "dividend": 0.20, "recordDate": None, "declarationDate": None},
+]
+
 
 @pytest.mark.anyio
 async def test_get_ownership_returns_schema():
-    with patch("app.services.ownership_service.yf.Ticker", return_value=_make_mock_ticker()):
+    with patch.object(fmp_client, "get_institutional_holders", new=AsyncMock(return_value=MOCK_HOLDERS)):
         result = await get_ownership("AAPL")
     assert isinstance(result, OwnershipResponse)
     assert result.ticker == "AAPL"
@@ -30,31 +34,29 @@ async def test_get_ownership_returns_schema():
     assert 0 <= result.institutional_pct <= 100
     assert len(result.top_holders) == 2
 
+
 @pytest.mark.anyio
 async def test_get_ownership_percentages_correct():
-    with patch("app.services.ownership_service.yf.Ticker", return_value=_make_mock_ticker()):
+    with patch.object(fmp_client, "get_institutional_holders", new=AsyncMock(return_value=MOCK_HOLDERS)):
         result = await get_ownership("AAPL")
-    assert result.insider_pct == 3.0      # 0.03 * 100
-    assert result.institutional_pct == 62.0  # 0.62 * 100
+    # insider_pct is 0.0 — not available on FMP free tier
+    assert result.insider_pct == 0.0
+    # institutional_pct = sum of sharesPercent * 100 = (0.079 + 0.065) * 100 = 14.4
+    assert abs(result.institutional_pct - 14.4) < 0.01
+
 
 @pytest.mark.anyio
 async def test_get_dividends_returns_schema():
-    with patch("app.services.ownership_service.yf.Ticker", return_value=_make_mock_ticker()):
+    with patch.object(fmp_client, "get_dividends", new=AsyncMock(return_value=MOCK_DIVIDENDS)):
         result = await get_dividends("AAPL")
     assert isinstance(result, DividendResponse)
     assert len(result.dividends) == 4
     assert result.dividends[0].amount == 0.24
 
+
 @pytest.mark.anyio
 async def test_get_dividends_filters_to_five_years():
-    mock = _make_mock_ticker()
-    # Add an old dividend outside the 5-year window
-    old_date = pd.Timestamp("2018-01-01")
-    new_dates = pd.to_datetime(["2024-02-09", "2023-11-10"])
-    all_dates = pd.DatetimeIndex(pd.concat([pd.Series(new_dates), pd.Series([old_date])]))
-    mock.dividends = pd.Series([0.24, 0.24, 0.20], index=all_dates, name="Dividends")
-
-    with patch("app.services.ownership_service.yf.Ticker", return_value=mock):
+    with patch.object(fmp_client, "get_dividends", new=AsyncMock(return_value=MOCK_DIVIDENDS_WITH_OLD)):
         result = await get_dividends("AAPL")
-    # Only the 2 recent ones should be returned (old_date is > 5 years before max)
-    assert len(result.dividends) <= 3
+    # 2018-01-01 is outside the 5-year window from today (2026-04-13)
+    assert len(result.dividends) == 2

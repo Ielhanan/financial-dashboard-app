@@ -1,13 +1,14 @@
-import asyncio
 import logging
-import pandas as pd
-import yfinance as yf
+from datetime import datetime, timedelta
 from app.models.schemas import (
     OwnershipResponse, OwnershipRecord,
     DividendResponse, DividendRecord,
 )
+from app.services import fmp_client
 
 logger = logging.getLogger(__name__)
+
+_FIVE_YEARS_AGO = lambda: (datetime.now() - timedelta(days=5 * 365)).strftime("%Y-%m-%d")
 
 
 async def get_ownership(ticker: str) -> OwnershipResponse:
@@ -19,29 +20,27 @@ async def get_ownership(ticker: str) -> OwnershipResponse:
 
 
 async def _get_ownership_inner(ticker: str) -> OwnershipResponse:
-    loop = asyncio.get_event_loop()
-    t = await loop.run_in_executor(None, lambda: yf.Ticker(ticker))
+    holders = await fmp_client.get_institutional_holders(ticker)
 
-    info = t.info
-    insider_pct = float(info.get("heldPercentInsiders") or 0.0) * 100
-    inst_pct = float(info.get("heldPercentInstitutions") or 0.0) * 100
+    inst_pct = round(
+        sum(float(h.get("sharesPercent") or 0.0) for h in holders[:10]) * 100, 2
+    )
 
-    holders: list[OwnershipRecord] = []
-    ih = t.institutional_holders
-    if ih is not None and not ih.empty:
-        for _, row in ih.head(10).iterrows():
-            holders.append(OwnershipRecord(
-                holder=str(row.get("Holder", "")),
-                shares=float(row.get("Shares", 0)),
-                pct_out=float(row.get("% Out", 0)) * 100,
-                holder_type="institutional",
-            ))
+    top_holders = [
+        OwnershipRecord(
+            holder=str(h.get("holder", "")),
+            shares=float(h.get("shares") or 0),
+            pct_out=round(float(h.get("sharesPercent") or 0.0) * 100, 2),
+            holder_type="institutional",
+        )
+        for h in holders[:10]
+    ]
 
     return OwnershipResponse(
         ticker=ticker.upper(),
-        insider_pct=round(insider_pct, 2),
-        institutional_pct=round(inst_pct, 2),
-        top_holders=holders,
+        insider_pct=0.0,   # Not available on FMP free tier
+        institutional_pct=inst_pct,
+        top_holders=top_holders,
     )
 
 
@@ -54,24 +53,19 @@ async def get_dividends(ticker: str) -> DividendResponse:
 
 
 async def _get_dividends_inner(ticker: str) -> DividendResponse:
-    loop = asyncio.get_event_loop()
-    t = await loop.run_in_executor(None, lambda: yf.Ticker(ticker))
+    dividends = await fmp_client.get_dividends(ticker)
+    cutoff = _FIVE_YEARS_AGO()
 
-    divs = t.dividends
-    yield_pct = float(t.info.get("trailingAnnualDividendYield") or 0.0) * 100
-
-    records: list[DividendRecord] = []
-    if divs is not None and not divs.empty:
-        cutoff = divs.index.max() - pd.DateOffset(years=5)
-        recent = divs[divs.index >= cutoff]
-
-        for date, amount in recent.items():
-            records.append(DividendRecord(
-                date=date.date().isoformat(),
-                amount=float(amount),
-                yield_pct=round(yield_pct, 2),
-                ex_date=None,
-                declaration_date=None,
-            ))
+    records = [
+        DividendRecord(
+            date=d.get("date", ""),
+            amount=float(d.get("dividend") or 0.0),
+            yield_pct=None,
+            ex_date=d.get("recordDate") or None,
+            declaration_date=d.get("declarationDate") or None,
+        )
+        for d in dividends
+        if d.get("date", "") >= cutoff
+    ]
 
     return DividendResponse(ticker=ticker.upper(), dividends=records)
