@@ -5,13 +5,16 @@ from app.models.schemas import RatiosResponse
 from app.services import fmp_client
 
 MOCK_KEY_METRICS = {
-    "peRatio": 28.5,
-    "pbRatio": 45.2,
-    "enterpriseValueOverEBITDA": 22.1,
-    "pfcfRatio": 27.0,
-    "debtToEquity": 1.5,
+    "evToEBITDA": 22.1,
     "enterpriseValue": 2_735_000_000_000,
     "marketCap": 2_700_000_000_000,
+}
+
+MOCK_RATIOS = {
+    "priceToEarningsRatio": 28.5,
+    "priceToBookRatio": 45.2,
+    "priceToFreeCashFlowRatio": 27.0,
+    "debtToEquityRatio": 1.5,
 }
 
 MOCK_PROFILE = {"sector": "Technology"}
@@ -37,6 +40,7 @@ MOCK_BALANCE_A = [
 def _patch_all():
     return (
         patch.object(fmp_client, "get_key_metrics", new=AsyncMock(return_value=MOCK_KEY_METRICS)),
+        patch.object(fmp_client, "get_ratios", new=AsyncMock(return_value=MOCK_RATIOS)),
         patch.object(fmp_client, "get_profile", new=AsyncMock(return_value=MOCK_PROFILE)),
         patch.object(fmp_client, "get_cash_flow_annual", new=AsyncMock(return_value=MOCK_CASH_FLOW_A)),
         patch.object(fmp_client, "get_balance_sheets_annual", new=AsyncMock(return_value=MOCK_BALANCE_A)),
@@ -45,7 +49,7 @@ def _patch_all():
 
 @pytest.mark.anyio
 async def test_get_ratios_returns_schema():
-    with _patch_all()[0], _patch_all()[1], _patch_all()[2], _patch_all()[3]:
+    with _patch_all()[0], _patch_all()[1], _patch_all()[2], _patch_all()[3], _patch_all()[4]:
         result = await get_ratios("AAPL")
     assert isinstance(result, RatiosResponse)
     assert result.ticker == "AAPL"
@@ -53,7 +57,7 @@ async def test_get_ratios_returns_schema():
 
 @pytest.mark.anyio
 async def test_get_ratios_has_five_current_ratios():
-    with _patch_all()[0], _patch_all()[1], _patch_all()[2], _patch_all()[3]:
+    with _patch_all()[0], _patch_all()[1], _patch_all()[2], _patch_all()[3], _patch_all()[4]:
         result = await get_ratios("AAPL")
     names = [r.name for r in result.current]
     assert "P/E" in names
@@ -65,14 +69,14 @@ async def test_get_ratios_has_five_current_ratios():
 
 @pytest.mark.anyio
 async def test_get_ratios_historical_has_five_years():
-    with _patch_all()[0], _patch_all()[1], _patch_all()[2], _patch_all()[3]:
+    with _patch_all()[0], _patch_all()[1], _patch_all()[2], _patch_all()[3], _patch_all()[4]:
         result = await get_ratios("AAPL")
     assert len(result.historical) == 5
 
 
 @pytest.mark.anyio
 async def test_get_ratios_sector_benchmark_technology():
-    with _patch_all()[0], _patch_all()[1], _patch_all()[2], _patch_all()[3]:
+    with _patch_all()[0], _patch_all()[1], _patch_all()[2], _patch_all()[3], _patch_all()[4]:
         result = await get_ratios("AAPL")
     pe_ratio = next(r for r in result.current if r.name == "P/E")
     assert pe_ratio.sector_average == 28.0  # Technology PE benchmark

@@ -16,7 +16,7 @@ async def get_market_snapshot(ticker: str) -> MarketSnapshot:
 
         price = float(quote.get("price") or 0.0)
         market_cap = float(quote.get("marketCap") or 0.0)
-        shares = float(quote.get("sharesOutstanding") or 0.0)
+        shares = round(market_cap / price, 0) if price > 0 else 0.0
         ev = float(metrics.get("enterpriseValue") or market_cap)
 
         latest = balance_sheets[0] if balance_sheets else {}

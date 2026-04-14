@@ -1,6 +1,9 @@
 """
 FMP (Financial Modeling Prep) API client with in-process per-endpoint caching.
 
+Uses the /stable API (post-August 2025). Symbol is always passed as a query
+parameter (?symbol=AAPL) rather than in the URL path.
+
 Cache keys are (ticker, endpoint_name) tuples.
 Each (ticker, endpoint) pair has its own asyncio.Lock so concurrent requests
 for different endpoints on the same ticker proceed in parallel while duplicate
@@ -17,11 +20,11 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-_BASE_URL = "https://financialmodelingprep.com/api/v3"
+_BASE_URL = "https://financialmodelingprep.com/stable"
 
 # TTLs in seconds
 _TTL_QUOTE = 300        # 5 min  — price / market cap
-_TTL_RATIOS = 3600      # 1 hr   — key metrics, holders
+_TTL_RATIOS = 3600      # 1 hr   — key metrics, ratios, holders
 _TTL_STMTS = 86400      # 24 hr  — income / balance / cash-flow statements
 _TTL_NEWS = 1800        # 30 min — news feed
 
@@ -38,7 +41,7 @@ def _get_lock(ticker: str, endpoint: str) -> asyncio.Lock:
 
 
 async def _fetch(path: str, params: dict | None = None) -> Any:
-    """Single GET to FMP. Returns parsed JSON or None on any error."""
+    """Single GET to FMP stable API. Returns parsed JSON or None on any error."""
     full_params: dict[str, Any] = {"apikey": settings.financial_api_key}
     if params:
         full_params.update(params)
@@ -48,8 +51,8 @@ async def _fetch(path: str, params: dict | None = None) -> Any:
         if resp.status_code == 429:
             logger.warning("FMP rate limit (429): %s", path)
             return None
-        if resp.status_code == 403:
-            logger.info("FMP plan restriction (403): %s", path)
+        if resp.status_code in (402, 403):
+            logger.info("FMP plan restriction (%s): %s", resp.status_code, path)
             return None
         resp.raise_for_status()
         return resp.json()
@@ -89,71 +92,82 @@ async def _cached(
 # ---------------------------------------------------------------------------
 
 async def get_quote(ticker: str) -> dict:
-    """GET /quote/{ticker} — price, marketCap, sharesOutstanding."""
-    data = await _cached(ticker, "quote", f"/quote/{ticker}", _TTL_QUOTE)
+    """GET /quote?symbol={ticker} — price, marketCap."""
+    data = await _cached(ticker, "quote", "/quote", _TTL_QUOTE, {"symbol": ticker})
     if isinstance(data, list) and data:
         return data[0]
     return {}
 
 
 async def get_profile(ticker: str) -> dict:
-    """GET /profile/{ticker} — sector, industry, companyName."""
-    data = await _cached(ticker, "profile", f"/profile/{ticker}", _TTL_RATIOS)
+    """GET /profile?symbol={ticker} — sector, industry, companyName."""
+    data = await _cached(ticker, "profile", "/profile", _TTL_RATIOS, {"symbol": ticker})
     if isinstance(data, list) and data:
         return data[0]
     return {}
 
 
 async def get_income_statements_quarterly(ticker: str) -> list[dict]:
-    """GET /income-statement/{ticker}?period=quarter&limit=20"""
+    """GET /income-statement?symbol={ticker}&period=quarterly&limit=20"""
     data = await _cached(
-        ticker, "income_q", f"/income-statement/{ticker}", _TTL_STMTS,
-        {"period": "quarter", "limit": 20},
+        ticker, "income_q", "/income-statement", _TTL_STMTS,
+        {"symbol": ticker, "period": "quarterly", "limit": 20},
     )
     return data if isinstance(data, list) else []
 
 
 async def get_income_statements_annual(ticker: str) -> list[dict]:
-    """GET /income-statement/{ticker}?period=annual&limit=5"""
+    """GET /income-statement?symbol={ticker}&period=annual&limit=5"""
     data = await _cached(
-        ticker, "income_a", f"/income-statement/{ticker}", _TTL_STMTS,
-        {"period": "annual", "limit": 5},
+        ticker, "income_a", "/income-statement", _TTL_STMTS,
+        {"symbol": ticker, "period": "annual", "limit": 5},
     )
     return data if isinstance(data, list) else []
 
 
 async def get_balance_sheets_quarterly(ticker: str) -> list[dict]:
-    """GET /balance-sheet-statement/{ticker}?period=quarter&limit=20"""
+    """GET /balance-sheet-statement?symbol={ticker}&period=quarterly&limit=20"""
     data = await _cached(
-        ticker, "balance_q", f"/balance-sheet-statement/{ticker}", _TTL_STMTS,
-        {"period": "quarter", "limit": 20},
+        ticker, "balance_q", "/balance-sheet-statement", _TTL_STMTS,
+        {"symbol": ticker, "period": "quarterly", "limit": 20},
     )
     return data if isinstance(data, list) else []
 
 
 async def get_balance_sheets_annual(ticker: str) -> list[dict]:
-    """GET /balance-sheet-statement/{ticker}?period=annual&limit=5"""
+    """GET /balance-sheet-statement?symbol={ticker}&period=annual&limit=5"""
     data = await _cached(
-        ticker, "balance_a", f"/balance-sheet-statement/{ticker}", _TTL_STMTS,
-        {"period": "annual", "limit": 5},
+        ticker, "balance_a", "/balance-sheet-statement", _TTL_STMTS,
+        {"symbol": ticker, "period": "annual", "limit": 5},
     )
     return data if isinstance(data, list) else []
 
 
 async def get_cash_flow_annual(ticker: str) -> list[dict]:
-    """GET /cash-flow-statement/{ticker}?period=annual&limit=5"""
+    """GET /cash-flow-statement?symbol={ticker}&period=annual&limit=5"""
     data = await _cached(
-        ticker, "cashflow_a", f"/cash-flow-statement/{ticker}", _TTL_STMTS,
-        {"period": "annual", "limit": 5},
+        ticker, "cashflow_a", "/cash-flow-statement", _TTL_STMTS,
+        {"symbol": ticker, "period": "annual", "limit": 5},
     )
     return data if isinstance(data, list) else []
 
 
 async def get_key_metrics(ticker: str) -> dict:
-    """GET /key-metrics/{ticker}?period=annual&limit=1 — peRatio, pbRatio, evToEbitda, etc."""
+    """GET /key-metrics?symbol={ticker}&period=annual&limit=1 — enterpriseValue, evToEBITDA."""
     data = await _cached(
-        ticker, "key_metrics", f"/key-metrics/{ticker}", _TTL_RATIOS,
-        {"period": "annual", "limit": 1},
+        ticker, "key_metrics", "/key-metrics", _TTL_RATIOS,
+        {"symbol": ticker, "period": "annual", "limit": 1},
+    )
+    if isinstance(data, list) and data:
+        return data[0]
+    return {}
+
+
+async def get_ratios(ticker: str) -> dict:
+    """GET /ratios?symbol={ticker}&period=annual&limit=1 — peRatio, pbRatio, debtToEquity, pfcfRatio."""
+    data = await _cached(
+        ticker, "ratios", "/ratios", _TTL_RATIOS,
+        {"symbol": ticker, "period": "annual", "limit": 1},
     )
     if isinstance(data, list) and data:
         return data[0]
@@ -161,28 +175,25 @@ async def get_key_metrics(ticker: str) -> dict:
 
 
 async def get_institutional_holders(ticker: str) -> list[dict]:
-    """GET /institutional-holder/{ticker} — holder, shares, sharesPercent."""
-    data = await _cached(
-        ticker, "inst_holders", f"/institutional-holder/{ticker}", _TTL_RATIOS,
-    )
-    return data if isinstance(data, list) else []
+    """Institutional holder data — not available on FMP free tier."""
+    return []
 
 
 async def get_dividends(ticker: str) -> list[dict]:
-    """GET /historical-price-full/stock_dividend/{ticker} — historical dividend records."""
+    """GET /dividends?symbol={ticker} — historical dividend records."""
     data = await _cached(
-        ticker, "dividends",
-        f"/historical-price-full/stock_dividend/{ticker}", _TTL_STMTS,
+        ticker, "dividends", "/dividends", _TTL_STMTS,
+        {"symbol": ticker},
     )
+    # Stable API returns a list directly
+    if isinstance(data, list):
+        return data
+    # Legacy v3 fallback: wrapped in {"historical": [...]}
     if isinstance(data, dict) and "historical" in data:
         return data["historical"]
     return []
 
 
 async def get_news(ticker: str) -> list[dict]:
-    """GET /stock_news?tickers={ticker}&limit=30"""
-    data = await _cached(
-        ticker, "news", "/stock_news", _TTL_NEWS,
-        {"tickers": ticker, "limit": 30},
-    )
-    return data if isinstance(data, list) else []
+    """Stock news — not available on FMP free tier."""
+    return []

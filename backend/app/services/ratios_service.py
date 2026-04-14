@@ -38,8 +38,9 @@ async def get_ratios(ticker: str) -> RatiosResponse:
 
 
 async def _get_ratios_inner(ticker: str) -> RatiosResponse:
-    metrics, profile, cash_flows, balance_sheets = await asyncio.gather(
+    metrics, ratios, profile, cash_flows, balance_sheets = await asyncio.gather(
         fmp_client.get_key_metrics(ticker),
+        fmp_client.get_ratios(ticker),
         fmp_client.get_profile(ticker),
         fmp_client.get_cash_flow_annual(ticker),
         fmp_client.get_balance_sheets_annual(ticker),
@@ -48,11 +49,11 @@ async def _get_ratios_inner(ticker: str) -> RatiosResponse:
     sector = profile.get("sector", "Technology")
     market_cap = float(metrics.get("marketCap") or 0.0)
 
-    pe = _safe_float(metrics.get("peRatio"))
-    pb = _safe_float(metrics.get("pbRatio"))
-    ev_ebitda = _safe_float(metrics.get("enterpriseValueOverEBITDA"))
-    p_fcf = _safe_float(metrics.get("pfcfRatio"))
-    d_e = _safe_float(metrics.get("debtToEquity"))
+    pe = _safe_float(ratios.get("priceToEarningsRatio"))
+    pb = _safe_float(ratios.get("priceToBookRatio"))
+    ev_ebitda = _safe_float(metrics.get("evToEBITDA"))
+    p_fcf = _safe_float(ratios.get("priceToFreeCashFlowRatio"))
+    d_e = _safe_float(ratios.get("debtToEquityRatio"))
 
     current = [
         RatioWithBenchmark(name="P/E",       value=pe,       sector_average=SECTOR_PE_BENCHMARKS.get(sector)),
