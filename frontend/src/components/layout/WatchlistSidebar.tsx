@@ -27,7 +27,7 @@ export function WatchlistSidebar() {
   }
 
   return (
-    <aside className="sticky top-[57px] h-[calc(100vh-57px)] w-52 flex-shrink-0 flex flex-col bg-slate-950 border-r border-gray-700/60 overflow-hidden">
+    <aside className="sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] w-52 flex-shrink-0 flex flex-col bg-slate-950 border-r border-gray-700/60 overflow-hidden">
 
       {/* Section: Title */}
       <div className="px-4 pt-4 pb-3 border-b border-gray-700/60">
