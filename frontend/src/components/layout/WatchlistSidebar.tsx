@@ -54,6 +54,7 @@ export function WatchlistSidebar() {
         />
         <button
           onClick={handleAdd}
+          aria-label="Add ticker to watchlist"
           className="px-2.5 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors"
         >
           +
@@ -72,7 +73,15 @@ export function WatchlistSidebar() {
             return (
               <li
                 key={symbol}
+                role="button"
+                tabIndex={0}
                 onClick={() => setTicker(symbol)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setTicker(symbol);
+                  }
+                }}
                 className={`flex items-center justify-between rounded-md px-2.5 py-2 cursor-pointer transition-colors group
                   ${
                     isActive
