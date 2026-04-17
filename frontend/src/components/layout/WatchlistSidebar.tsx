@@ -71,39 +71,23 @@ export function WatchlistSidebar() {
           watchlist.map((symbol) => {
             const isActive = symbol === ticker;
             return (
-              <li
-                key={symbol}
-                role="button"
-                tabIndex={0}
-                onClick={() => setTicker(symbol)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setTicker(symbol);
-                  }
-                }}
-                className={`flex items-center justify-between rounded-md px-2.5 py-2 cursor-pointer transition-colors group
-                  ${
-                    isActive
-                      ? "bg-emerald-900/30 border border-emerald-500/50"
-                      : "bg-gray-800/60 border border-transparent hover:border-gray-600"
-                  }`}
-              >
-                <span
-                  className={`font-mono text-sm font-semibold ${
-                    isActive
-                      ? "text-emerald-400"
-                      : "text-gray-300 group-hover:text-white"
-                  }`}
-                >
-                  {symbol}
-                </span>
+              <li key={symbol} className="flex items-center gap-1.5">
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeStock(symbol);
-                  }}
-                  className="text-gray-600 hover:text-red-400 transition-colors text-base leading-none ml-1"
+                  onClick={() => setTicker(symbol)}
+                  className={`flex-1 text-left rounded-md px-2.5 py-2 transition-colors group
+                    ${isActive
+                      ? "bg-emerald-900/30 border border-emerald-500/50"
+                      : "bg-gray-800/60 border border-transparent hover:border-gray-600"}`}
+                >
+                  <span className={`font-mono text-sm font-semibold ${
+                    isActive ? "text-emerald-400" : "text-gray-300 group-hover:text-white"
+                  }`}>
+                    {symbol}
+                  </span>
+                </button>
+                <button
+                  onClick={() => removeStock(symbol)}
+                  className="text-gray-600 hover:text-red-400 transition-colors text-base leading-none flex-shrink-0 px-1"
                   aria-label={`Remove ${symbol}`}
                 >
                   ×
