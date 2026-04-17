@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { TickerSearch } from "./TickerSearch";
+import { WatchlistSidebar } from "./WatchlistSidebar";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -15,9 +16,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
         <TickerSearch />
       </header>
-      <main className="p-6 grid grid-cols-1 xl:grid-cols-12 gap-6">
-        {children}
-      </main>
+      <div className="flex">
+        <WatchlistSidebar />
+        <main className="flex-1 min-w-0 p-6 grid grid-cols-1 xl:grid-cols-12 gap-6">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }
