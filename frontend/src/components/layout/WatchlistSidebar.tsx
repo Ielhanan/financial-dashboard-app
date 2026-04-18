@@ -42,10 +42,10 @@ export function WatchlistSidebar() {
   // ── List (tab) handlers ────────────────────────────────────────────────────
 
   function handleAddList() {
-    const newName = `Watchlist ${lists.length + 1}`;
     const newId = addList();           // addList returns the new id and sets it active
+    const newList = useWatchlistsStore.getState().lists.find((l) => l.id === newId);
     setRenamingId(newId);
-    setRenameValue(newName);
+    setRenameValue(newList?.name ?? "");
   }
 
   function commitRename() {
@@ -88,7 +88,7 @@ export function WatchlistSidebar() {
                 setRenamingId(list.id);
                 setRenameValue(list.name);
               }}
-              className={`flex items-center gap-1 px-2.5 py-2 cursor-pointer flex-shrink-0 border-b-2 transition-colors select-none
+              className={`group flex items-center gap-1 px-2.5 py-2 cursor-pointer flex-shrink-0 border-b-2 transition-colors select-none
                 ${isActive
                   ? "border-emerald-500 bg-gray-800/60"
                   : "border-transparent hover:bg-gray-800/30"}`}
