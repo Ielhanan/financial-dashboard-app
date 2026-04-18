@@ -6,6 +6,10 @@ export interface MarketSnapshot {
   shares_outstanding: number;
   total_debt: number;
   cash: number;
+  change: number;
+  change_pct: number;
+  market_cap_yoy: number | null;
+  total_debt_yoy: number | null;
 }
 
 export interface QuarterlyEPS {
