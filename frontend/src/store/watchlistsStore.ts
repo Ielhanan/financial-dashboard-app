@@ -75,11 +75,12 @@ export const useWatchlistsStore = create<WatchlistsState>()(
         },
 
         removeTicker: (symbol) => {
+          const upper = symbol.trim().toUpperCase();
           const { lists, activeId } = get();
           set({
             lists: lists.map((l) =>
               l.id === activeId
-                ? { ...l, tickers: l.tickers.filter((t) => t !== symbol) }
+                ? { ...l, tickers: l.tickers.filter((t) => t !== upper) }
                 : l
             ),
           });
