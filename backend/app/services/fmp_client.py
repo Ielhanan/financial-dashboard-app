@@ -194,6 +194,15 @@ async def get_dividends(ticker: str) -> list[dict]:
     return []
 
 
+async def get_earnings(ticker: str) -> list[dict]:
+    """GET /earnings?symbol={ticker} — historical EPS actual vs estimate per quarter."""
+    data = await _cached(
+        ticker, "earnings", "/earnings", _TTL_STMTS,
+        {"symbol": ticker},
+    )
+    return data if isinstance(data, list) else []
+
+
 async def get_news(ticker: str) -> list[dict]:
     """Stock news — not available on FMP free tier."""
     return []

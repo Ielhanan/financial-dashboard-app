@@ -16,6 +16,7 @@ interface DataTableProps<T> {
   title?: string;
   exportFilename?: string;
   emptyMessage?: string;
+  fillHeight?: boolean;
 }
 
 export function DataTable<T extends Record<string, unknown>>({
@@ -24,6 +25,7 @@ export function DataTable<T extends Record<string, unknown>>({
   title,
   exportFilename = "export",
   emptyMessage = "No data available",
+  fillHeight = false,
 }: DataTableProps<T>) {
   const [sortKey, setSortKey] = useState<keyof T | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
@@ -66,27 +68,30 @@ export function DataTable<T extends Record<string, unknown>>({
   }
 
   return (
-    <div className="rounded-lg border border-gray-800 bg-gray-900 overflow-hidden">
+    <div className={`card overflow-hidden ${fillHeight ? "h-full flex flex-col" : ""}`}>
       {title && (
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-          <h3 className="text-sm font-semibold text-white">{title}</h3>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700/60">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
           <button
             onClick={exportXLSX}
-            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+            className="text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 transition-colors font-medium"
           >
             Export XLSX
           </button>
         </div>
       )}
-      <div className="overflow-x-auto">
+      <div className={`overflow-x-auto ${fillHeight ? "flex-1 overflow-y-auto" : ""}`}>
         <table className="w-full text-sm">
-          <thead className="text-gray-400 text-xs uppercase">
-            <tr>
+          <thead>
+            <tr className="border-b border-gray-100 dark:border-gray-700/60">
               {columns.map((col) => (
                 <th
                   key={String(col.key)}
                   onClick={() => handleSort(col.key)}
-                  className="px-4 py-2 text-left cursor-pointer hover:text-gray-200 select-none"
+                  className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide
+                             text-gray-500 dark:text-gray-400
+                             cursor-pointer hover:text-gray-900 dark:hover:text-gray-200
+                             select-none transition-colors"
                 >
                   {col.label}
                   {sortKey === col.key ? (sortAsc ? " ↑" : " ↓") : ""}
@@ -98,10 +103,11 @@ export function DataTable<T extends Record<string, unknown>>({
             {sorted.map((row, i) => (
               <tr
                 key={i}
-                className="border-t border-gray-800 hover:bg-gray-800 transition-colors"
+                className="border-t border-gray-50 dark:border-gray-700/40
+                           hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors"
               >
                 {columns.map((col) => (
-                  <td key={String(col.key)} className="px-4 py-2 text-gray-200">
+                  <td key={String(col.key)} className="px-4 py-2.5 text-gray-700 dark:text-gray-300">
                     {col.format
                       ? col.format(row[col.key])
                       : String(row[col.key] ?? "—")}
@@ -113,7 +119,7 @@ export function DataTable<T extends Record<string, unknown>>({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="px-4 py-8 text-center text-gray-500"
+                  className="px-4 py-8 text-center text-gray-400 dark:text-gray-500 text-sm"
                 >
                   {emptyMessage}
                 </td>

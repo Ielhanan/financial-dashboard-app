@@ -7,5 +7,25 @@
 }
 
 body {
-  @apply bg-gray-950 text-gray-100;
+  @apply bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-50;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Card hover glow */
+.card {
+  @apply rounded-xl border border-gray-200 bg-white dark:border-gray-700/60 dark:bg-gray-800;
+  @apply transition-all duration-200;
+}
+
+.card:hover {
+  @apply border-emerald-300/50 dark:border-emerald-500/30;
+  box-shadow:
+    0 0 0 1px rgba(16, 185, 129, 0.15),
+    0 4px 24px rgba(16, 185, 129, 0.07);
+}
+
+.dark .card:hover {
+  box-shadow:
+    0 0 0 1px rgba(16, 185, 129, 0.2),
+    0 4px 28px rgba(16, 185, 129, 0.09);
 }

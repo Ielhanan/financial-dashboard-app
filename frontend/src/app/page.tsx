@@ -31,11 +31,13 @@ export default function DashboardPage() {
         <RatiosModule />
       </div>
 
-      {/* Row 4: Ownership + News */}
-      <div className="xl:col-span-8">
+      {/* Row 4: Ownership — full width so dividend chart fills the screen */}
+      <div className="xl:col-span-12">
         <OwnershipModule />
       </div>
-      <div className="xl:col-span-4">
+
+      {/* Row 5: News */}
+      <div className="xl:col-span-12">
         <NewsFeed />
       </div>
     </DashboardLayout>

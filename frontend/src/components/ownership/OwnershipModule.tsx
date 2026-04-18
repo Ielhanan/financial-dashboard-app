@@ -8,13 +8,15 @@ import { useTickerStore } from "@/store/tickerStore";
 import { useOwnership, useDividends } from "@/hooks/useFinancials";
 import { ChartWrapper } from "@/components/shared/ChartWrapper";
 import { DataTable } from "@/components/shared/DataTable";
-
-const COLORS = ["#3b82f6", "#10b981", "#6b7280"];
+import { useChartColors } from "@/hooks/useChartColors";
 
 export function OwnershipModule() {
   const ticker = useTickerStore((s) => s.ticker);
   const { data: ownership, isLoading: ownerLoading, error: ownerError } = useOwnership(ticker);
   const { data: dividends, isLoading: divLoading, error: divError } = useDividends(ticker);
+  const c = useChartColors();
+
+  const PIE_COLORS = [c.blue, c.emerald, c.gray];
 
   const pieData = [
     { name: "Insider", value: ownership?.insider_pct ?? 0 },
@@ -28,11 +30,11 @@ export function OwnershipModule() {
   }));
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <ChartWrapper
         title="Ownership Structure"
         subtitle="Insider vs Institutional vs Other"
-        height={240}
+        height={260}
         isLoading={ownerLoading}
         error={ownerError ? String(ownerError) : null}
       >
@@ -41,16 +43,23 @@ export function OwnershipModule() {
             data={pieData}
             cx="50%"
             cy="50%"
-            outerRadius={90}
+            outerRadius={95}
             dataKey="value"
-            label={({ name, value }: { name?: string; value?: number }) => `${name ?? ""}: ${(value ?? 0).toFixed(1)}%`}
+            label={({ name, value }: { name?: string; value?: number }) =>
+              `${name ?? ""}: ${(value ?? 0).toFixed(1)}%`
+            }
             labelLine={false}
           >
             {pieData.map((_, i) => (
-              <Cell key={i} fill={COLORS[i % COLORS.length]} />
+              <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
             ))}
           </Pie>
-          <Tooltip formatter={(v: unknown) => `${Number(v).toFixed(2)}%`} />
+          <Tooltip
+            contentStyle={{ backgroundColor: c.tooltipBg, border: `1px solid ${c.tooltipBorder}`, borderRadius: 8, color: c.tooltipText }}
+            labelStyle={{ color: c.tooltipText }}
+            itemStyle={{ color: c.tooltipText }}
+            formatter={(v: unknown) => `${Number(v).toFixed(2)}%`}
+          />
         </PieChart>
       </ChartWrapper>
 
@@ -70,38 +79,47 @@ export function OwnershipModule() {
         ]}
       />
 
-      <ChartWrapper
-        title="Dividend Payment History"
-        subtitle="Per-share dividend amount over time"
-        isLoading={divLoading}
-        error={divError ? String(divError) : null}
-      >
-        <BarChart data={divChartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-          <XAxis dataKey="date" tick={{ fill: "#9ca3af", fontSize: 9 }} interval={3} />
-          <YAxis tick={{ fill: "#9ca3af", fontSize: 10 }} />
-          <Tooltip
-            contentStyle={{ backgroundColor: "#1f2937", border: "1px solid #374151", borderRadius: 6 }}
-            formatter={(v: unknown) => [`$${Number(v).toFixed(4)}`, "Dividend"]}
+      <div className="lg:col-span-2 flex items-stretch gap-4">
+        <div className="w-4/5 flex flex-col min-h-0">
+          <ChartWrapper
+            title="Dividend Payment History"
+            subtitle="Per-share dividend amount over time"
+            fillHeight
+            isLoading={divLoading}
+            error={divError ? String(divError) : null}
+          >
+            <BarChart data={divChartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
+              <XAxis dataKey="date" tick={{ fill: c.tick, fontSize: 9 }} interval={3} />
+              <YAxis tick={{ fill: c.tick, fontSize: 10 }} />
+              <Tooltip
+                contentStyle={{ backgroundColor: c.tooltipBg, border: `1px solid ${c.tooltipBorder}`, borderRadius: 8, color: c.tooltipText }}
+                labelStyle={{ color: c.tooltipText }}
+                itemStyle={{ color: c.tooltipText }}
+                cursor={{ fill: "transparent" }}
+                allowEscapeViewBox={{ x: true, y: false }}
+                formatter={(v: unknown) => [`$${Number(v).toFixed(4)}`, "Dividend"]}
+              />
+              <Bar dataKey="amount" name="Dividend/Share" fill={c.emerald} radius={[3, 3, 0, 0]} activeBar={false} />
+            </BarChart>
+          </ChartWrapper>
+        </div>
+        <div className="w-1/5 flex flex-col min-h-0">
+          <DataTable
+            title="Dividend Details"
+            exportFilename={`${ticker}-dividends`}
+            fillHeight
+            data={(dividends?.dividends ?? []).slice(-20).reverse().map((d) => ({
+              date: d.date,
+              amount: d.amount,
+            }))}
+            columns={[
+              { key: "date", label: "Date" },
+              { key: "amount", label: "Amount/Share", format: (v) => `$${(v as number).toFixed(4)}` },
+            ]}
           />
-          <Bar dataKey="amount" name="Dividend/Share" fill="#10b981" radius={[3, 3, 0, 0]} />
-        </BarChart>
-      </ChartWrapper>
-
-      <DataTable
-        title="Dividend Details"
-        exportFilename={`${ticker}-dividends`}
-        data={(dividends?.dividends ?? []).slice(-20).reverse().map((d) => ({
-          date: d.date,
-          amount: d.amount,
-          yield_pct: d.yield_pct,
-        }))}
-        columns={[
-          { key: "date", label: "Date" },
-          { key: "amount", label: "Amount/Share", format: (v) => `$${(v as number).toFixed(4)}` },
-          { key: "yield_pct", label: "Annual Yield", format: (v) => v != null ? `${(v as number).toFixed(2)}%` : "—" },
-        ]}
-      />
+        </div>
+      </div>
     </div>
   );
 }

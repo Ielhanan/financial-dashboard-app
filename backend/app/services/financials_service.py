@@ -56,14 +56,26 @@ async def get_eps_revenue(ticker: str) -> EPSRevenueResponse:
 
 
 async def _get_eps_revenue_inner(ticker: str) -> EPSRevenueResponse:
-    annual_raw, quarterly_raw = await asyncio.gather(
+    annual_raw, quarterly_raw, earnings_raw = await asyncio.gather(
         fmp_client.get_income_statements_annual(ticker),
         fmp_client.get_income_statements_quarterly(ticker),
+        fmp_client.get_earnings(ticker),
     )
 
     # FMP returns newest-first; reverse to oldest-first for chronological order
     annual_stmts = list(reversed(annual_raw))
     quarterly_stmts = list(reversed(quarterly_raw))
+
+    # Build a lookup: period label → (eps_estimate, revenue_estimate) from FMP earnings
+    earnings_lookup: dict[str, tuple[float | None, float | None]] = {}
+    for e in (earnings_raw or []):
+        date = e.get("date") or e.get("fiscalDateEnding") or ""
+        if not date:
+            continue
+        period = _fmt_period_str(date[:10])
+        eps_est = _safe_float(e.get("epsEstimated"))
+        rev_est = _safe_float(e.get("revenueEstimated"))
+        earnings_lookup[period] = (eps_est, rev_est)
 
     eps_records: list[QuarterlyEPS] = []
     rev_records: list[QuarterlyRevenue] = []
@@ -87,24 +99,25 @@ async def _get_eps_revenue_inner(ticker: str) -> EPSRevenueResponse:
             revenue_yoy_delta_pct=None,
         ))
 
-    # Quarterly actuals
+    # Quarterly actuals — merge estimates from FMP earnings endpoint
     for i, stmt in enumerate(quarterly_stmts):
         period = _fmt_period_str(stmt.get("date", ""))
         eps = _safe_float(stmt.get("eps"))
         rev = _safe_float(stmt.get("revenue"))
         prior_eps = _safe_float(quarterly_stmts[i - 4].get("eps")) if i >= 4 else None
         prior_rev = _safe_float(quarterly_stmts[i - 4].get("revenue")) if i >= 4 else None
+        est = earnings_lookup.get(period, (None, None))
 
         eps_records.append(QuarterlyEPS(
             period=period,
             eps_actual=eps,
-            eps_estimate=None,
+            eps_estimate=est[0],
             eps_yoy_delta_pct=_yoy_delta(eps, prior_eps),
         ))
         rev_records.append(QuarterlyRevenue(
             period=period,
             revenue_actual=rev,
-            revenue_estimate=None,
+            revenue_estimate=est[1],
             revenue_yoy_delta_pct=_yoy_delta(rev, prior_rev),
         ))
 

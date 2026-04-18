@@ -7,6 +7,7 @@ import { useTickerStore } from "@/store/tickerStore";
 import { useEPSRevenue } from "@/hooks/useFinancials";
 import { ChartWrapper } from "@/components/shared/ChartWrapper";
 import { DataTable } from "@/components/shared/DataTable";
+import { useChartColors } from "@/hooks/useChartColors";
 
 function fmtRev(v: number | null | undefined) {
   if (v == null) return "—";
@@ -25,11 +26,12 @@ function fmtDelta(v: number | null | undefined) {
 export function EPSRevenueChart() {
   const ticker = useTickerStore((s) => s.ticker);
   const { data, isLoading, error } = useEPSRevenue(ticker);
+  const c = useChartColors();
 
   const allPeriods = data?.quarterly_revenue ?? [];
   const allEPS = data?.quarterly_eps ?? [];
 
-  // Chart: exclude FY annual rows (different revenue scale) — quarterly actual + projected only
+  // Chart: quarterly actual + projected only (no FY)
   const chartData = allPeriods
     .filter((r) => !r.period.startsWith("FY"))
     .map((rev, i) => {
@@ -48,20 +50,37 @@ export function EPSRevenueChart() {
       };
     });
 
-  // Table: all rows — FY annual + quarterly actuals + projected
-  const tableData = allPeriods.map((rev, i) => {
-    const eps = allEPS[i];
-    const isFY = rev.period.startsWith("FY");
-    const isEst = !isFY && rev.revenue_actual == null && rev.revenue_estimate != null;
-    return {
-      period: rev.period,
-      type: isFY ? "Annual" : isEst ? "Estimate" : "Quarterly",
-      revenue_actual: isFY ? rev.revenue_actual : (rev.revenue_actual ?? rev.revenue_estimate),
-      revenue_yoy: rev.revenue_yoy_delta_pct,
-      eps_actual: eps?.eps_actual ?? eps?.eps_estimate ?? null,
-      eps_yoy: eps?.eps_yoy_delta_pct ?? null,
-    };
-  });
+  // Separate annual rows (FY*) for their own table
+  const annualTableData = allPeriods
+    .filter((r) => r.period.startsWith("FY"))
+    .map((rev, i) => {
+      const eps = allEPS.filter((e) => e.period.startsWith("FY"))[i];
+      return {
+        period: rev.period,
+        revenue_actual: rev.revenue_actual,
+        revenue_yoy: rev.revenue_yoy_delta_pct,
+        eps_actual: eps?.eps_actual ?? null,
+        eps_yoy: eps?.eps_yoy_delta_pct ?? null,
+      };
+    });
+
+  // Quarterly rows: past actuals + future estimates (no FY)
+  const quarterlyTableData = allPeriods
+    .filter((r) => !r.period.startsWith("FY"))
+    .map((rev, i) => {
+      const eps = allEPS.filter((e) => !e.period.startsWith("FY"))[i];
+      const isFuture = rev.revenue_actual == null && rev.revenue_estimate != null;
+      return {
+        period: rev.period,
+        type: isFuture ? "Estimate" : "Actual",
+        revenue_actual: isFuture ? null : rev.revenue_actual,
+        revenue_estimate: rev.revenue_estimate,
+        revenue_yoy: rev.revenue_yoy_delta_pct,
+        eps_actual: isFuture ? null : (eps?.eps_actual ?? null),
+        eps_estimate: eps?.eps_estimate ?? null,
+        eps_yoy: eps?.eps_yoy_delta_pct ?? null,
+      };
+    });
 
   return (
     <div className="space-y-4">
@@ -73,30 +92,33 @@ export function EPSRevenueChart() {
         error={error ? String(error) : null}
       >
         <ComposedChart data={chartData} margin={{ top: 8, right: 24, left: 8, bottom: 24 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+          <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
           <XAxis
             dataKey="period"
-            tick={{ fill: "#9ca3af", fontSize: 10 }}
+            tick={{ fill: c.tick, fontSize: 10 }}
             angle={-35}
             textAnchor="end"
             interval={0}
             height={52}
           />
-          <YAxis yAxisId="left" tick={{ fill: "#9ca3af", fontSize: 10 }} tickFormatter={(v) => `$${v.toFixed(0)}B`} />
-          <YAxis yAxisId="right" orientation="right" tick={{ fill: "#9ca3af", fontSize: 10 }} tickFormatter={(v) => `$${v.toFixed(2)}`} />
+          <YAxis yAxisId="left" tick={{ fill: c.tick, fontSize: 10 }} tickFormatter={(v) => `$${v.toFixed(0)}B`} />
+          <YAxis yAxisId="right" orientation="right" tick={{ fill: c.tick, fontSize: 10 }} tickFormatter={(v) => `$${v.toFixed(2)}`} />
           <Tooltip
-            contentStyle={{ backgroundColor: "#1f2937", border: "1px solid #374151", borderRadius: 6 }}
+            contentStyle={{ backgroundColor: c.tooltipBg, border: `1px solid ${c.tooltipBorder}`, borderRadius: 8, color: c.tooltipText }}
+            labelStyle={{ color: c.tooltipText }}
+            itemStyle={{ color: c.tooltipText }}
+            cursor={false}
             formatter={(value: unknown, name: unknown) => {
               const v = Number(value);
-              return name === "revenue_b"
+              return name === "Revenue"
                 ? [`$${v.toFixed(1)}B`, "Revenue"]
                 : [`$${v.toFixed(2)}`, "EPS"];
             }}
           />
-          <Legend wrapperStyle={{ fontSize: 11, color: "#9ca3af" }} />
-          <Bar yAxisId="left" dataKey="revenue_b" name="Revenue" radius={[3, 3, 0, 0]}>
+          <Legend wrapperStyle={{ fontSize: 11, color: c.tick }} />
+          <Bar yAxisId="left" dataKey="revenue_b" name="Revenue" radius={[3, 3, 0, 0]} activeBar={false}>
             {chartData.map((entry, i) => (
-              <Cell key={i} fill={entry.isEstimate ? "#4b5563" : "#3b82f6"} opacity={entry.isEstimate ? 0.7 : 0.85} />
+              <Cell key={i} fill={entry.isEstimate ? c.estimateBar : c.blue} opacity={entry.isEstimate ? 0.7 : 0.9} />
             ))}
           </Bar>
           <Line
@@ -104,7 +126,7 @@ export function EPSRevenueChart() {
             type="monotone"
             dataKey="eps"
             name="EPS"
-            stroke="#10b981"
+            stroke={c.emerald}
             dot={(props) => {
               const { cx, cy, payload } = props as { cx: number; cy: number; payload: { isEstimate: boolean } };
               return (
@@ -113,26 +135,40 @@ export function EPSRevenueChart() {
                   cx={cx}
                   cy={cy}
                   r={3}
-                  fill={payload.isEstimate ? "none" : "#10b981"}
-                  stroke="#10b981"
+                  fill={payload.isEstimate ? "none" : c.emerald}
+                  stroke={c.emerald}
                   strokeWidth={payload.isEstimate ? 1.5 : 0}
                   strokeDasharray={payload.isEstimate ? "3 2" : undefined}
                 />
               );
             }}
             strokeWidth={2}
-            strokeDasharray={undefined}
           />
         </ComposedChart>
       </ChartWrapper>
 
       <DataTable
-        title="EPS & Revenue Detail"
-        exportFilename={`${ticker}-eps-revenue`}
-        data={tableData}
+        title="EPS & Revenue — Quarterly Detail"
+        exportFilename={`${ticker}-eps-revenue-quarterly`}
+        data={quarterlyTableData}
         columns={[
           { key: "period", label: "Period" },
           { key: "type", label: "Type" },
+          { key: "revenue_actual", label: "Rev Actual", format: (v) => fmtRev(v as number | null) },
+          { key: "revenue_estimate", label: "Rev Estimate", format: (v) => fmtRev(v as number | null) },
+          { key: "revenue_yoy", label: "Rev YoY", format: (v) => fmtDelta(v as number | null | undefined) },
+          { key: "eps_actual", label: "EPS Actual", format: (v) => fmtEPS(v as number | null) },
+          { key: "eps_estimate", label: "EPS Est.", format: (v) => fmtEPS(v as number | null) },
+          { key: "eps_yoy", label: "EPS YoY", format: (v) => fmtDelta(v as number | null | undefined) },
+        ]}
+      />
+
+      <DataTable
+        title="EPS & Revenue — Annual History"
+        exportFilename={`${ticker}-eps-revenue-annual`}
+        data={annualTableData}
+        columns={[
+          { key: "period", label: "Fiscal Year" },
           { key: "revenue_actual", label: "Revenue", format: (v) => fmtRev(v as number | null) },
           { key: "revenue_yoy", label: "Rev YoY", format: (v) => fmtDelta(v as number | null | undefined) },
           { key: "eps_actual", label: "EPS", format: (v) => fmtEPS(v as number | null) },
