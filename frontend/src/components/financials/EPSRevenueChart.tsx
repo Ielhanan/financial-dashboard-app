@@ -162,6 +162,7 @@ export function EPSRevenueChart() {
           {
             key: "revenue_actual",
             label: "Revenue",
+            format: (v) => fmtRev(v as number | null),
             render: (_val, row) => (
               <div>
                 <span className={beatMissClass(row.revenue_actual as number | null, row.revenue_estimate as number | null)}>
@@ -179,6 +180,7 @@ export function EPSRevenueChart() {
           {
             key: "eps_actual",
             label: "EPS",
+            format: (v) => fmtEPS(v as number | null),
             render: (_val, row) => (
               <div>
                 <span className={beatMissClass(row.eps_actual as number | null, row.eps_estimate as number | null)}>
