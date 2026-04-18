@@ -11,6 +11,10 @@ class MarketSnapshot(BaseModel):
     shares_outstanding: float
     total_debt: float
     cash: float
+    change: float              # daily $ change
+    change_pct: float          # daily % change
+    market_cap_yoy: Optional[float]   # % YoY vs prior annual entry; None if unavailable
+    total_debt_yoy: Optional[float]   # % YoY vs same quarter 1 year ago; None if unavailable
 
 # --- Financials ---
 
