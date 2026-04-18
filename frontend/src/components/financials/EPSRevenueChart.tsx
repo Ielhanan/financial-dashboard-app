@@ -79,7 +79,6 @@ export function EPSRevenueChart() {
       const isFuture = rev.revenue_actual == null && rev.revenue_estimate != null;
       return {
         period: rev.period,
-        type: isFuture ? "Estimate" : "Actual",
         revenue_actual: isFuture ? null : rev.revenue_actual,
         revenue_estimate: rev.revenue_estimate,
         revenue_yoy: rev.revenue_yoy_delta_pct,
