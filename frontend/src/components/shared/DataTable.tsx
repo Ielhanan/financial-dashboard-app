@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type React from "react";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
@@ -8,6 +9,7 @@ interface Column<T> {
   key: keyof T;
   label: string;
   format?: (val: T[keyof T]) => string;
+  render?: (val: T[keyof T], row: T) => React.ReactNode;
 }
 
 interface DataTableProps<T> {
@@ -16,6 +18,7 @@ interface DataTableProps<T> {
   title?: string;
   exportFilename?: string;
   emptyMessage?: string;
+  emptyState?: React.ReactNode;
   fillHeight?: boolean;
 }
 
@@ -25,6 +28,7 @@ export function DataTable<T extends Record<string, unknown>>({
   title,
   exportFilename = "export",
   emptyMessage = "No data available",
+  emptyState,
   fillHeight = false,
 }: DataTableProps<T>) {
   const [sortKey, setSortKey] = useState<keyof T | null>(null);
@@ -80,54 +84,60 @@ export function DataTable<T extends Record<string, unknown>>({
           </button>
         </div>
       )}
-      <div className={`overflow-x-auto ${fillHeight ? "flex-1 overflow-y-auto" : ""}`}>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-100 dark:border-gray-700/60">
-              {columns.map((col) => (
-                <th
-                  key={String(col.key)}
-                  onClick={() => handleSort(col.key)}
-                  className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide
-                             text-gray-500 dark:text-gray-400
-                             cursor-pointer hover:text-gray-900 dark:hover:text-gray-200
-                             select-none transition-colors"
-                >
-                  {col.label}
-                  {sortKey === col.key ? (sortAsc ? " ↑" : " ↓") : ""}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((row, i) => (
-              <tr
-                key={i}
-                className="border-t border-gray-50 dark:border-gray-700/40
-                           hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors"
-              >
+      {sorted.length === 0 && emptyState ? (
+        <div className={fillHeight ? "flex-1" : ""}>{emptyState}</div>
+      ) : (
+        <div className={`overflow-x-auto ${fillHeight ? "flex-1 overflow-y-auto" : ""}`}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 dark:border-gray-700/60">
                 {columns.map((col) => (
-                  <td key={String(col.key)} className="px-4 py-2.5 text-gray-700 dark:text-gray-300">
-                    {col.format
-                      ? col.format(row[col.key])
-                      : String(row[col.key] ?? "—")}
-                  </td>
+                  <th
+                    key={String(col.key)}
+                    onClick={() => handleSort(col.key)}
+                    className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide
+                               text-gray-500 dark:text-gray-400
+                               cursor-pointer hover:text-gray-900 dark:hover:text-gray-200
+                               select-none transition-colors"
+                  >
+                    {col.label}
+                    {sortKey === col.key ? (sortAsc ? " ↑" : " ↓") : ""}
+                  </th>
                 ))}
               </tr>
-            ))}
-            {sorted.length === 0 && (
-              <tr>
-                <td
-                  colSpan={columns.length}
-                  className="px-4 py-8 text-center text-gray-400 dark:text-gray-500 text-sm"
+            </thead>
+            <tbody>
+              {sorted.map((row, i) => (
+                <tr
+                  key={i}
+                  className="border-t border-gray-50 dark:border-gray-700/40
+                             hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors"
                 >
-                  {emptyMessage}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                  {columns.map((col) => (
+                    <td key={String(col.key)} className="px-4 py-2.5 text-gray-700 dark:text-gray-300">
+                      {col.render
+                        ? col.render(row[col.key], row)
+                        : col.format
+                          ? col.format(row[col.key])
+                          : String(row[col.key] ?? "—")}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+              {sorted.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={columns.length}
+                    className="px-4 py-8 text-center text-gray-400 dark:text-gray-500 text-sm"
+                  >
+                    {emptyMessage}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
