@@ -23,6 +23,13 @@ function fmtDelta(v: number | null | undefined) {
   return `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
 }
 
+function beatMissClass(actual: number | null, estimate: number | null): string {
+  if (actual == null || estimate == null) return "";
+  if (actual > estimate) return "text-green-400";
+  if (actual < estimate) return "text-red-400";
+  return "";
+}
+
 export function EPSRevenueChart() {
   const ticker = useTickerStore((s) => s.ticker);
   const { data, isLoading, error } = useEPSRevenue(ticker);
@@ -153,12 +160,39 @@ export function EPSRevenueChart() {
         data={quarterlyTableData}
         columns={[
           { key: "period", label: "Period" },
-          { key: "type", label: "Type" },
-          { key: "revenue_actual", label: "Rev Actual", format: (v) => fmtRev(v as number | null) },
-          { key: "revenue_estimate", label: "Rev Estimate", format: (v) => fmtRev(v as number | null) },
+          {
+            key: "revenue_actual",
+            label: "Revenue",
+            render: (_val, row) => (
+              <div>
+                <span className={beatMissClass(row.revenue_actual as number | null, row.revenue_estimate as number | null)}>
+                  {fmtRev(row.revenue_actual as number | null)}
+                </span>
+                {row.revenue_estimate != null && (
+                  <div className="text-xs text-slate-500">
+                    Est: {fmtRev(row.revenue_estimate as number | null)}
+                  </div>
+                )}
+              </div>
+            ),
+          },
           { key: "revenue_yoy", label: "Rev YoY", format: (v) => fmtDelta(v as number | null | undefined) },
-          { key: "eps_actual", label: "EPS Actual", format: (v) => fmtEPS(v as number | null) },
-          { key: "eps_estimate", label: "EPS Est.", format: (v) => fmtEPS(v as number | null) },
+          {
+            key: "eps_actual",
+            label: "EPS",
+            render: (_val, row) => (
+              <div>
+                <span className={beatMissClass(row.eps_actual as number | null, row.eps_estimate as number | null)}>
+                  {fmtEPS(row.eps_actual as number | null)}
+                </span>
+                {row.eps_estimate != null && (
+                  <div className="text-xs text-slate-500">
+                    Est: {fmtEPS(row.eps_estimate as number | null)}
+                  </div>
+                )}
+              </div>
+            ),
+          },
           { key: "eps_yoy", label: "EPS YoY", format: (v) => fmtDelta(v as number | null | undefined) },
         ]}
       />
