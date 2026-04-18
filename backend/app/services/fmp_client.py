@@ -163,6 +163,15 @@ async def get_key_metrics(ticker: str) -> dict:
     return {}
 
 
+async def get_key_metrics_annual(ticker: str) -> list[dict]:
+    """GET /key-metrics?symbol={ticker}&period=annual&limit=2 — returns up to 2 annual entries for YoY comparison."""
+    data = await _cached(
+        ticker, "key_metrics_annual", "/key-metrics", _TTL_RATIOS,
+        {"symbol": ticker, "period": "annual", "limit": 2},
+    )
+    return data if isinstance(data, list) else []
+
+
 async def get_ratios(ticker: str) -> dict:
     """GET /ratios?symbol={ticker}&period=annual&limit=1 — peRatio, pbRatio, debtToEquity, pfcfRatio."""
     data = await _cached(
