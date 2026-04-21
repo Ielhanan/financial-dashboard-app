@@ -1,7 +1,8 @@
 "use client";
 
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  AreaChart, Area,
+  XAxis, YAxis, CartesianGrid, Tooltip,
   PieChart, Pie, Cell,
 } from "recharts";
 import { useTickerStore } from "@/store/tickerStore";
@@ -9,6 +10,7 @@ import { useOwnership, useDividends } from "@/hooks/useFinancials";
 import { ChartWrapper } from "@/components/shared/ChartWrapper";
 import { DataTable } from "@/components/shared/DataTable";
 import { useChartColors } from "@/hooks/useChartColors";
+import { Lock } from "lucide-react";
 
 export function OwnershipModule() {
   const ticker = useTickerStore((s) => s.ticker);
@@ -24,10 +26,13 @@ export function OwnershipModule() {
     { name: "Other", value: Math.max(0, 100 - (ownership?.insider_pct ?? 0) - (ownership?.institutional_pct ?? 0)) },
   ];
 
-  const divChartData = (dividends?.dividends ?? []).slice(-20).map((d) => ({
-    date: d.date.slice(0, 7),
-    amount: d.amount,
-  }));
+  const divChartData = (dividends?.dividends ?? [])
+    .slice(0, 20)   // newest-first API: first 20 = most recent
+    .reverse()      // flip to oldest→newest for left-to-right axis
+    .map((d) => ({
+      date: d.date.slice(0, 7),
+      amount: d.amount,
+    }));
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -45,10 +50,6 @@ export function OwnershipModule() {
             cy="50%"
             outerRadius={95}
             dataKey="value"
-            label={({ name, value }: { name?: string; value?: number }) =>
-              `${name ?? ""}: ${(value ?? 0).toFixed(1)}%`
-            }
-            labelLine={false}
           >
             {pieData.map((_, i) => (
               <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
@@ -67,6 +68,21 @@ export function OwnershipModule() {
         title="Top Institutional Holders"
         exportFilename={`${ticker}-ownership`}
         emptyMessage="Institutional holder data is not available on the free FMP plan."
+        emptyState={
+          <div className="flex flex-col items-center justify-center py-10 px-6 gap-3">
+            <Lock className="w-8 h-8 text-gray-300 dark:text-gray-600" />
+            <p className="text-sm text-gray-400 dark:text-gray-500 text-center max-w-xs leading-relaxed">
+              Institutional holder data is not available on the free FMP plan.
+            </p>
+            <button
+              disabled
+              className="mt-1 px-3 py-1.5 text-xs rounded border border-gray-200 dark:border-gray-700
+                         text-gray-400 dark:text-gray-600 cursor-not-allowed select-none"
+            >
+              Upgrade Plan
+            </button>
+          </div>
+        }
         data={(ownership?.top_holders ?? []).map((h) => ({
           holder: h.holder,
           pct_out: h.pct_out,
@@ -88,7 +104,13 @@ export function OwnershipModule() {
             isLoading={divLoading}
             error={divError ? String(divError) : null}
           >
-            <BarChart data={divChartData}>
+            <AreaChart data={divChartData}>
+              <defs>
+                <linearGradient id="divGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={c.emerald} stopOpacity={0.25} />
+                  <stop offset="95%" stopColor={c.emerald} stopOpacity={0} />
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
               <XAxis dataKey="date" tick={{ fill: c.tick, fontSize: 9 }} interval={3} />
               <YAxis tick={{ fill: c.tick, fontSize: 10 }} />
@@ -96,12 +118,21 @@ export function OwnershipModule() {
                 contentStyle={{ backgroundColor: c.tooltipBg, border: `1px solid ${c.tooltipBorder}`, borderRadius: 8, color: c.tooltipText }}
                 labelStyle={{ color: c.tooltipText }}
                 itemStyle={{ color: c.tooltipText }}
-                cursor={{ fill: "transparent" }}
+                cursor={{ stroke: c.grid }}
                 allowEscapeViewBox={{ x: true, y: false }}
                 formatter={(v: unknown) => [`$${Number(v).toFixed(4)}`, "Dividend"]}
               />
-              <Bar dataKey="amount" name="Dividend/Share" fill={c.emerald} radius={[3, 3, 0, 0]} activeBar={false} />
-            </BarChart>
+              <Area
+                type="monotone"
+                dataKey="amount"
+                name="Dividend/Share"
+                stroke={c.emerald}
+                strokeWidth={2}
+                fill="url(#divGradient)"
+                dot={false}
+                activeDot={{ r: 4, fill: c.emerald }}
+              />
+            </AreaChart>
           </ChartWrapper>
         </div>
         <div className="w-1/5 flex flex-col min-h-0">

@@ -27,6 +27,10 @@ _TTL_QUOTE = 300        # 5 min  — price / market cap
 _TTL_RATIOS = 3600      # 1 hr   — key metrics, ratios, holders
 _TTL_STMTS = 86400      # 24 hr  — income / balance / cash-flow statements
 _TTL_NEWS = 1800        # 30 min — news feed
+_TTL_BACKOFF = 300      # 5 min  — retry delay after a 429 (matches FMP rate limit window)
+
+# Sentinel stored in cache when FMP returns 429 — prevents immediate retries
+_RATE_LIMITED = object()
 
 # In-process cache: (ticker, endpoint) → (data, fetched_at_monotonic)
 _cache: dict[tuple[str, str], tuple[Any, float]] = {}
@@ -50,7 +54,7 @@ async def _fetch(path: str, params: dict | None = None) -> Any:
             resp = await client.get(path, params=full_params)
         if resp.status_code == 429:
             logger.warning("FMP rate limit (429): %s", path)
-            return None
+            return _RATE_LIMITED
         if resp.status_code in (402, 403):
             logger.info("FMP plan restriction (%s): %s", resp.status_code, path)
             return None
@@ -74,16 +78,19 @@ async def _cached(
         now = time.monotonic()
         if cache_key in _cache:
             data, fetched_at = _cache[cache_key]
-            if now - fetched_at < ttl:
-                return data
+            effective_ttl = _TTL_BACKOFF if data is _RATE_LIMITED else ttl
+            if now - fetched_at < effective_ttl:
+                return None if data is _RATE_LIMITED else data
         fresh = await _fetch(path, params)
-        if fresh is not None:
+        if fresh is not None:  # includes _RATE_LIMITED sentinel
             _cache[cache_key] = (fresh, time.monotonic())
-            return fresh
+            return None if fresh is _RATE_LIMITED else fresh
         # Return stale value rather than crashing if fetch failed
         if cache_key in _cache:
-            logger.warning("FMP fetch failed, serving stale cache for %s/%s", ticker, endpoint)
-            return _cache[cache_key][0]
+            data = _cache[cache_key][0]
+            if data is not _RATE_LIMITED:
+                logger.warning("FMP fetch failed, serving stale cache for %s/%s", ticker, endpoint)
+                return data
         return None
 
 

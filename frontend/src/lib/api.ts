@@ -18,6 +18,18 @@ export const api = {
   getMarket: (ticker: string) =>
     http.get<MarketSnapshot>(`/api/market/${ticker}`).then((r) => r.data),
 
+  /** Returns true if the ticker is recognised by the backend (price > 0). */
+  validateTicker: async (ticker: string): Promise<boolean> => {
+    try {
+      const snapshot = await http
+        .get<MarketSnapshot>(`/api/market/${ticker}`)
+        .then((r) => r.data);
+      return snapshot.price > 0;
+    } catch {
+      return false;
+    }
+  },
+
   getEPSRevenue: (ticker: string) =>
     http.get<EPSRevenueResponse>(`/api/financials/${ticker}/eps-revenue`).then((r) => r.data),
 

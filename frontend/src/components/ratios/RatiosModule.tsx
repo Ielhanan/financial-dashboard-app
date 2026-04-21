@@ -39,7 +39,7 @@ export function RatiosModule() {
           <XAxis type="number" tick={{ fill: c.tick, fontSize: 10 }} />
           <YAxis dataKey="name" type="category" tick={{ fill: c.tick, fontSize: 11 }} width={60} />
           <Tooltip
-            contentStyle={{ backgroundColor: c.tooltipBg, border: `1px solid ${c.tooltipBorder}`, borderRadius: 8, color: c.tooltipText }}
+            contentStyle={{ backgroundColor: c.tooltipBg, border: `1px solid ${c.tooltipBorder}`, borderRadius: 6, color: c.tooltipText }}
             labelStyle={{ color: c.tooltipText }}
             itemStyle={{ color: c.tooltipText }}
             cursor={{ fill: "transparent" }}

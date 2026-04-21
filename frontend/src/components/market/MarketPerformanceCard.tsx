@@ -25,10 +25,12 @@ export function MarketPerformanceCard() {
               <span className="text-xl text-blue-600 dark:text-blue-300 font-mono font-medium">
                 ${snapshot.price.toFixed(2)}
               </span>
-              <span className={`text-sm font-mono ${snapshot.change >= 0 ? "text-green-500" : "text-red-500"}`}>
-                {snapshot.change >= 0 ? "+" : ""}
-                {snapshot.change.toFixed(2)} ({snapshot.change_pct.toFixed(2)}%)
-              </span>
+              {snapshot.change != null && (
+                <span className={`text-sm font-mono ${snapshot.change >= 0 ? "text-green-500" : "text-red-500"}`}>
+                  {snapshot.change >= 0 ? "+" : ""}
+                  {snapshot.change.toFixed(2)} ({(snapshot.change_pct ?? 0).toFixed(2)}%)
+                </span>
+              )}
             </>
           )}
         </div>

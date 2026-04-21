@@ -1,3 +1,24 @@
 
 # Git worktrees
 .worktrees/
+
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.env
+
+# Node
+frontend/node_modules/
+frontend/.next/
+frontend/.env.local
+
+# Tools / local artifacts
+.playwright-mcp/
+.superpowers/
+*.png
+*.jpg
+
+# OS
+.DS_Store
+Thumbs.db
