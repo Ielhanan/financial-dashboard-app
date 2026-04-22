@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, KeyboardEvent } from "react";
 import { ChevronDown, Pencil, Trash2, Plus, Check, Loader2 } from "lucide-react";
 import { useWatchlistsStore } from "@/store/watchlistsStore";
 import { useTickerStore } from "@/store/tickerStore";
+import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
 
 export function WatchlistSidebar() {
@@ -14,6 +15,7 @@ export function WatchlistSidebar() {
     addTicker, removeTicker,
   } = useWatchlistsStore();
   const { ticker, setTicker } = useTickerStore();
+  const { user } = useAuth();
 
   const [input, setInput] = useState("");
   const [isValidating, setIsValidating] = useState(false);
@@ -23,11 +25,6 @@ export function WatchlistSidebar() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Hydrate localStorage on first client render (skipHydration: true in store)
-  useEffect(() => {
-    useWatchlistsStore.persist.rehydrate();
-  }, []);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -106,7 +103,7 @@ export function WatchlistSidebar() {
   }
 
   function handleAddList() {
-    const newId = addList();
+    const newId = addList(user?.id ?? "");
     const newList = useWatchlistsStore.getState().lists.find((l) => l.id === newId);
     setDropdownOpen(false);
     setRenamingId(newId);

@@ -4,6 +4,7 @@ import { ReactNode } from "react";
 import { TickerSearch } from "./TickerSearch";
 import { WatchlistSidebar } from "./WatchlistSidebar";
 import { useThemeStore } from "@/store/themeStore";
+import { useAuth } from "@/hooks/useAuth";
 
 function SunIcon() {
   return (
@@ -31,6 +32,7 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { theme, toggle } = useThemeStore();
+  const { signOut } = useAuth();
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-250">
@@ -42,7 +44,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </h1>
           <p className="text-xs text-gray-400 dark:text-gray-500">Fundamental Analysis</p>
         </div>
-        <TickerSearch />
+        <div className="flex items-center gap-4">
+          <TickerSearch />
+          <button
+            onClick={signOut}
+            className="text-xs text-gray-400 hover:text-white transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
       </header>
 
       {/* Theme toggle — fixed top-right */}
